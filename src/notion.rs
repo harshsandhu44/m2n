@@ -271,18 +271,62 @@ fn check_status(status: reqwest::StatusCode, body: &Value) -> Result<Value> {
     }
     let msg = body["message"].as_str().unwrap_or("unknown error");
     if status == 401 {
-        bail!("Notion token is invalid. Check notion.token in your config.");
+        bail!(
+            "Authentication failed (401): token is invalid or expired.\n\
+             → Get a new token at https://www.notion.so/my-integrations and update notion.token in your config."
+        );
     }
     if status == 403 {
         bail!(
-            "No access: {}. Share the database with your integration in Notion.",
+            "Access denied (403): {}.\n\
+             → Open the database in Notion → click '...' → Connections → add your integration.",
             msg
         );
     }
     if status == 404 {
-        bail!("Not found (404): {}.", msg);
+        bail!(
+            "Not found (404): {}.\n\
+             → Check that the database ID in your config is correct and the page hasn't been deleted.",
+            msg
+        );
     }
     bail!("Notion API error ({}): {}", status, msg);
+}
+
+/// Parse a Notion database ID from a full URL or raw ID string.
+/// Accepts: full notion.so URLs, 32-char hex strings, UUID format.
+/// Returns: UUID-formatted string or None if unparseable.
+pub fn normalize_db_id(input: &str) -> Option<String> {
+    let s = input.trim();
+
+    // Strip URL down to the last path segment before any query/fragment
+    let segment = if s.contains("notion.so") {
+        s.split('?')
+            .next()
+            .and_then(|u| u.split('/').next_back())
+            .unwrap_or(s)
+    } else {
+        s
+    };
+
+    // Collect hex characters (strip dashes and non-hex chars from slugs)
+    let hex: String = segment.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+
+    if hex.len() < 32 {
+        return None;
+    }
+
+    // IDs are always the trailing 32 hex chars (after any slug prefix)
+    let id = &hex[hex.len() - 32..];
+
+    Some(format!(
+        "{}-{}-{}-{}-{}",
+        &id[0..8],
+        &id[8..12],
+        &id[12..16],
+        &id[16..20],
+        &id[20..32]
+    ))
 }
 
 // ── Markdown → Notion blocks ─────────────────────────────────────────────────
