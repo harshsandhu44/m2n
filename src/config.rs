@@ -5,7 +5,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub notes_dir: String,
+    // Kept optional for backward compat; no longer used by new/write
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes_dir: Option<String>,
     #[serde(default)]
     pub editor: Option<String>,
     pub notion: NotionConfig,

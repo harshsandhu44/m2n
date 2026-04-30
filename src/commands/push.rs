@@ -5,7 +5,7 @@ use crate::notion::{markdown_to_blocks, parse_note, serialize_frontmatter, Notio
 
 pub fn run(path_or_title: &str, dry_run: bool, open: bool) -> Result<()> {
     let config = Config::load()?;
-    let path = resolve_path(path_or_title, &config.notes_dir)?;
+    let path = resolve_path(path_or_title, config.notes_dir.as_deref())?;
     push_file(&path, &config, dry_run, open)
 }
 
@@ -143,22 +143,22 @@ fn open_url(url: &str) -> Result<()> {
     Ok(())
 }
 
-fn resolve_path(path_or_title: &str, notes_dir: &str) -> Result<PathBuf> {
+fn resolve_path(path_or_title: &str, notes_dir: Option<&str>) -> Result<PathBuf> {
     let as_path = Path::new(path_or_title);
     if as_path.exists() {
         return Ok(as_path.to_path_buf());
     }
 
-    let slug = slugify(path_or_title);
-    let candidate = Path::new(notes_dir).join(format!("{}.md", slug));
-    if candidate.exists() {
-        return Ok(candidate);
+    if let Some(dir) = notes_dir {
+        let slug = slugify(path_or_title);
+        let candidate = Path::new(dir).join(format!("{}.md", slug));
+        if candidate.exists() {
+            return Ok(candidate);
+        }
     }
 
     bail!(
-        "Note not found: '{}'\nTried: {}\nCreate it with `m2n new \"{}\"`",
-        path_or_title,
-        candidate.display(),
+        "File not found: '{}'\nPass a path to an existing Markdown file.",
         path_or_title
     );
 }

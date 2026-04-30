@@ -15,7 +15,7 @@ pub fn run() -> Result<()> {
         Ok(c) => c,
     };
 
-    println!("Notes dir   : {}", config.notes_dir);
+    println!("Notes dir   : {}", config.notes_dir.as_deref().unwrap_or("(not set)"));
     println!("Editor      : {}", config.editor());
 
     let editor_env = std::env::var("EDITOR").unwrap_or_else(|_| "(not set)".to_string());
