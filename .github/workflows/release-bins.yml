@@ -1,0 +1,69 @@
+name: Release binaries
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: m2n-x86_64-linux.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: m2n-aarch64-linux.tar.gz
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: m2n-x86_64-macos.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: m2n-aarch64-macos.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: m2n-x86_64-windows.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: tar -czf ${{ matrix.archive }} -C target/${{ matrix.target }}/release m2n
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/m2n.exe -DestinationPath ${{ matrix.archive }}
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
