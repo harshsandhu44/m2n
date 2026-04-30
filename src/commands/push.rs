@@ -3,39 +3,44 @@ use std::path::{Path, PathBuf};
 use crate::config::Config;
 use crate::notion::{markdown_to_blocks, parse_note, serialize_frontmatter, NotionClient};
 
-pub fn run(path_or_title: &str) -> Result<()> {
+pub fn run(path_or_title: &str, dry_run: bool, open: bool) -> Result<()> {
     let config = Config::load()?;
     let path = resolve_path(path_or_title, &config.notes_dir)?;
-    push_file(&path, &config)
+    push_file(&path, &config, dry_run, open)
 }
 
 /// Called by `write --push` after the editor closes.
 pub fn run_path(path: &Path) -> Result<()> {
     let config = Config::load()?;
-    push_file(path, &config)
+    push_file(path, &config, false, false)
 }
 
-fn push_file(path: &Path, config: &Config) -> Result<()> {
+fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<()> {
     let token = config
         .notion
         .token
         .as_deref()
         .filter(|t| !t.is_empty())
-        .context("notion.token is not set. Run `m2n init` and edit your config.")?;
+        .context(
+            "notion.token is not set.\n\
+             → Run `m2n init` to set up your Notion integration.",
+        )?;
 
     let db_id = config
         .notion
         .database_id
         .as_deref()
         .filter(|d| !d.is_empty())
-        .context("notion.database_id is not set. Run `m2n init` and edit your config.")?;
+        .context(
+            "notion.database_id is not set.\n\
+             → Run `m2n init` to configure your Notion database.",
+        )?;
 
     let raw = std::fs::read_to_string(path)
         .with_context(|| format!("Cannot read {}", path.display()))?;
 
     let (mut fm, body) = parse_note(&raw);
 
-    // Title fallback: frontmatter → first H1 → filename stem
     let title = fm
         .title
         .clone()
@@ -46,6 +51,25 @@ fn push_file(path: &Path, config: &Config) -> Result<()> {
                 .to_string_lossy()
                 .to_string()
         });
+
+    if dry_run {
+        println!("Dry run — nothing will be pushed to Notion.\n");
+        println!("  File:     {}", path.display());
+        println!("  Title:    \"{}\"", title);
+        println!(
+            "  Status:   {}",
+            fm.status.as_deref().unwrap_or("(none)")
+        );
+        if fm.tags.is_empty() {
+            println!("  Tags:     (none)");
+        } else {
+            println!("  Tags:     [{}]", fm.tags.join(", "));
+        }
+        println!("  Database: {}", db_id);
+        let blocks = markdown_to_blocks(body.trim_start());
+        println!("  Blocks:   {}", blocks.len());
+        return Ok(());
+    }
 
     if fm.notion_id.is_some() {
         eprintln!(
@@ -58,6 +82,22 @@ fn push_file(path: &Path, config: &Config) -> Result<()> {
         .inspect_database(db_id)
         .context("Failed to inspect Notion database")?;
 
+    // Warn about frontmatter fields that won't map to database properties
+    if fm.status.as_deref().is_some_and(|s| !s.is_empty()) && db_info.status_prop.is_none() {
+        eprintln!(
+            "Warning: note has status=\"{}\" but the database has no Status (select) property — field skipped.\n\
+             → Add a \"Status\" select property in Notion to sync this field.",
+            fm.status.as_deref().unwrap()
+        );
+    }
+    if !fm.tags.is_empty() && db_info.tags_prop.is_none() {
+        eprintln!(
+            "Warning: note has {} tag(s) but the database has no Tags (multi_select) property — field skipped.\n\
+             → Add a \"Tags\" multi_select property in Notion to sync this field.",
+            fm.tags.len()
+        );
+    }
+
     let blocks = markdown_to_blocks(body.trim_start());
     let page_id = client
         .create_page(db_id, &db_info, &title, fm.status.as_deref(), &fm.tags, blocks)
@@ -67,11 +107,38 @@ fn push_file(path: &Path, config: &Config) -> Result<()> {
     println!("Pushed: \"{}\"", title);
     println!("URL:    {}", url);
 
-    // Write notion_id back into frontmatter
     fm.notion_id = Some(page_id);
     let new_content = format!("{}\n{}", serialize_frontmatter(&fm), body.trim_start());
     std::fs::write(path, new_content)
         .with_context(|| format!("Pushed successfully but failed to update {}", path.display()))?;
+
+    if open {
+        open_url(&url)?;
+    }
+
+    Ok(())
+}
+
+fn open_url(url: &str) -> Result<()> {
+    let cmd = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        "xdg-open"
+    };
+
+    if cfg!(target_os = "windows") {
+        std::process::Command::new(cmd)
+            .args(["/c", "start", url])
+            .spawn()
+            .with_context(|| format!("Failed to open {}", url))?;
+    } else {
+        std::process::Command::new(cmd)
+            .arg(url)
+            .spawn()
+            .with_context(|| format!("Failed to open {}", url))?;
+    }
 
     Ok(())
 }

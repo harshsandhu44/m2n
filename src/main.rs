@@ -43,6 +43,12 @@ enum Command {
     Push {
         /// File path or note title
         path: String,
+        /// Preview what would be pushed without creating the Notion page
+        #[arg(long)]
+        dry_run: bool,
+        /// Open the Notion page in your browser after pushing
+        #[arg(long)]
+        open: bool,
     },
 }
 
@@ -56,6 +62,6 @@ fn main() -> Result<()> {
             commands::write::run(&title, push)
         }
         Command::Check => commands::check::run(),
-        Command::Push { path } => commands::push::run(&path),
+        Command::Push { path, dry_run, open } => commands::push::run(&path, dry_run, open),
     }
 }
