@@ -71,28 +71,27 @@ Then write your first note:
 m2n write "My First Note"
 ```
 
-Your editor opens with a blank Markdown file. Save and close — m2n pushes it to Notion automatically.
+Your editor opens with a pre-populated Markdown file. Save and close — m2n pushes it to Notion automatically.
 
 ## Commands
 
 ### `m2n init`
 
-Interactive setup wizard. Prompts for your Notion token and database URL, tests the connection, and saves config.
+Interactive setup wizard. Prompts for your Notion token, database URL, and notes directory, tests the connection, and saves config.
 
 ```bash
 m2n init
 ```
 
-### `m2n write <title>` / `m2n edit <title>`
+### `m2n write <title>`
 
-Open a temp file in your editor, then push to Notion on close. Both commands are identical.
+Open a note in your editor, creating it if it doesn't exist, then sync to Notion on close.
 
 ```bash
 m2n write "Meeting Notes 2026-05-01"
-m2n edit "Meeting Notes 2026-05-01"  # same thing
 ```
 
-The file is pre-populated with frontmatter:
+New notes are pre-populated with frontmatter:
 
 ```yaml
 ---
@@ -101,6 +100,34 @@ date: 2026-05-01T10:30:00-07:00
 status: draft
 tags: []
 ---
+
+# Meeting Notes 2026-05-01
+```
+
+Notes are saved to your configured `notes_dir` and persist locally across sessions.
+
+### `m2n edit <title>`
+
+Open an existing note in your editor and sync changes to Notion on close. Fails if the note doesn't exist — use `m2n write` to create it first.
+
+```bash
+m2n edit "Meeting Notes 2026-05-01"
+```
+
+### `m2n list`
+
+List all notes in your notes directory with their sync status.
+
+```bash
+m2n list
+```
+
+Sample output:
+
+```
+Meeting Notes 2026-05-01    [synced]
+Quick Idea                  [draft]
+Old Post                    [unsynced]
 ```
 
 ### `m2n new <title>`
@@ -182,6 +209,11 @@ m2n converts Markdown to native Notion blocks:
 | `**bold**` | Bold text |
 | `*italic*` | Italic text |
 | `` `code` `` | Inline code |
+| `~~text~~` | Strikethrough |
+| `[label](url)` | Link |
+| `- [ ] item` | To-do (unchecked) |
+| `- [x] item` | To-do (checked) |
+| Indented `- item` | Nested list |
 
 Supported code block languages: Rust, JavaScript, TypeScript, Python, Bash/Shell, Go, Java, C, C++, C#, Ruby, SQL, JSON, YAML, HTML, CSS, Markdown, TOML, and more.
 
