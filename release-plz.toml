@@ -4,6 +4,9 @@ publish = true
 # Always create release PRs even when not publishing to crates.io
 release_always = true
 
+# Binary crate — semver API checks don't apply
+semver_check = false
+
 # Create a GitHub release on each version tag
 git_release_enable = true
 git_release_draft = false
