@@ -19,20 +19,6 @@ pub struct NotionConfig {
 }
 
 impl Config {
-    pub fn default_config() -> Self {
-        let notes_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("notes")
-            .to_string_lossy()
-            .to_string();
-
-        Config {
-            notes_dir,
-            editor: None,
-            notion: NotionConfig::default(),
-        }
-    }
-
     pub fn load() -> Result<Self> {
         let path = config_path()?;
         let content = fs::read_to_string(&path)
