@@ -1,6 +1,5 @@
 [workspace]
-# Set to true when ready to publish to crates.io
-publish = false
+publish = true
 
 # Always create release PRs even when not publishing to crates.io
 release_always = true
