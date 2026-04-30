@@ -26,16 +26,18 @@ enum Command {
         /// Title of the note
         title: String,
     },
-    /// Open an editor, then sync the note directly to Notion
+    /// Open an editor, then sync the note to Notion (creates if new, updates if exists)
     Write {
         /// Title of the note
         title: String,
     },
-    /// Edit a note (alias for write)
+    /// Open an existing note in your editor and sync changes to Notion
     Edit {
         /// Title of the note
         title: String,
     },
+    /// List all notes in your notes directory
+    List,
     /// Check config, editor, and Notion connection
     Check,
     /// Push a note to Notion
@@ -57,7 +59,9 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Init => commands::init::run(),
         Command::New { title } => commands::new::run(&title),
-        Command::Write { title } | Command::Edit { title } => commands::write::run(&title),
+        Command::Write { title } => commands::write::run(&title),
+        Command::Edit { title } => commands::edit::run(&title),
+        Command::List => commands::list::run(),
         Command::Check => commands::check::run(),
         Command::Push {
             path,
