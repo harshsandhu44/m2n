@@ -1,6 +1,6 @@
 [package]
 name = "m2n"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Local-first CLI for creating Markdown notes and publishing to Notion"
 license = "MIT"
