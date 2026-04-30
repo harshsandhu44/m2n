@@ -70,8 +70,8 @@ impl Config {
 }
 
 pub fn config_path() -> Result<PathBuf> {
-    let base = dirs::config_dir().context("Could not determine config directory")?;
-    Ok(base.join("m2n").join("config.toml"))
+    let home = dirs::home_dir().context("Could not determine home directory")?;
+    Ok(home.join(".config").join("m2n").join("config.toml"))
 }
 
 fn which(cmd: &str) -> bool {
