@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1] - 2026-04-30
+
+### Documentation
+
+- Update README with list/edit commands and new markdown features
+
+
+
 ## [0.1.0] - 2026-04-30
 
 ### Bug Fixes
