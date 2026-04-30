@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::notion::{NotionClient, markdown_to_blocks, parse_note, serialize_frontmatter};
+use crate::util::slugify;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
@@ -68,12 +69,6 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
         return Ok(());
     }
 
-    if fm.notion_id.is_some() {
-        eprintln!(
-            "Warning: this note was already pushed (notion_id present). Creating a new page."
-        );
-    }
-
     let client = NotionClient::new(token);
     let db_info = client
         .inspect_database(db_id)
@@ -96,29 +91,48 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
     }
 
     let blocks = markdown_to_blocks(body.trim_start());
-    let page_id = client
-        .create_page(
-            db_id,
-            &db_info,
-            &title,
-            fm.status.as_deref(),
-            &fm.tags,
-            blocks,
-        )
-        .context("Failed to create Notion page")?;
 
-    let url = format!("https://www.notion.so/{}", page_id.replace('-', ""));
-    println!("Pushed: \"{}\"", title);
-    println!("URL:    {}", url);
-
-    fm.notion_id = Some(page_id);
-    let new_content = format!("{}\n{}", serialize_frontmatter(&fm), body.trim_start());
-    std::fs::write(path, new_content).with_context(|| {
-        format!(
-            "Pushed successfully but failed to update {}",
-            path.display()
-        )
-    })?;
+    let url = if let Some(ref existing_id) = fm.notion_id {
+        // UPDATE existing page — no frontmatter change needed
+        client
+            .update_page(
+                existing_id,
+                &db_info,
+                &title,
+                fm.status.as_deref(),
+                &fm.tags,
+                blocks,
+            )
+            .context("Failed to update Notion page")?;
+        let url = format!("https://www.notion.so/{}", existing_id.replace('-', ""));
+        println!("Updated: \"{}\"", title);
+        println!("URL:     {}", url);
+        url
+    } else {
+        // CREATE new page — write notion_id back to file
+        let page_id = client
+            .create_page(
+                db_id,
+                &db_info,
+                &title,
+                fm.status.as_deref(),
+                &fm.tags,
+                blocks,
+            )
+            .context("Failed to create Notion page")?;
+        let url = format!("https://www.notion.so/{}", page_id.replace('-', ""));
+        println!("Pushed: \"{}\"", title);
+        println!("URL:    {}", url);
+        fm.notion_id = Some(page_id);
+        let new_content = format!("{}\n{}", serialize_frontmatter(&fm), body.trim_start());
+        std::fs::write(path, new_content).with_context(|| {
+            format!(
+                "Pushed successfully but failed to update {}",
+                path.display()
+            )
+        })?;
+        url
+    };
 
     if open {
         open_url(&url)?;
@@ -175,15 +189,4 @@ fn first_h1(body: &str) -> Option<String> {
     body.lines()
         .find(|l| l.starts_with("# "))
         .map(|l| l[2..].trim().to_string())
-}
-
-fn slugify(s: &str) -> String {
-    s.to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
 }

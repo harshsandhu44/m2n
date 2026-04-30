@@ -260,6 +260,90 @@ impl NotionClient {
 
         Ok(page_id)
     }
+
+    pub fn update_page(
+        &self,
+        page_id: &str,
+        db_info: &DatabaseInfo,
+        title: &str,
+        status: Option<&str>,
+        tags: &[String],
+        blocks: Vec<Value>,
+    ) -> Result<()> {
+        // Update properties
+        let mut props = serde_json::Map::new();
+        props.insert(
+            db_info.title_prop.clone(),
+            json!({ "title": [{ "text": { "content": truncate(title, MAX_TEXT_LEN) } }] }),
+        );
+        if let (Some(prop), Some(s)) = (&db_info.status_prop, status)
+            && !s.is_empty()
+        {
+            props.insert(prop.clone(), json!({ "select": { "name": s } }));
+        }
+        if let Some(prop) = &db_info.tags_prop
+            && !tags.is_empty()
+        {
+            let tag_vals: Vec<Value> = tags.iter().map(|t| json!({ "name": t })).collect();
+            props.insert(prop.clone(), json!({ "multi_select": tag_vals }));
+        }
+        self.patch(
+            &format!("/pages/{}", page_id),
+            &json!({ "properties": props }),
+        )?;
+
+        // Clear existing content
+        let child_ids = self.get_block_children(page_id)?;
+        for id in child_ids {
+            self.patch(&format!("/blocks/{}", id), &json!({ "archived": true }))?;
+        }
+
+        // Append new blocks in batches of 100
+        let mut offset = 0;
+        while offset < blocks.len() {
+            let end = (offset + MAX_BLOCKS_PER_REQ).min(blocks.len());
+            self.patch(
+                &format!("/blocks/{}/children", page_id),
+                &json!({ "children": &blocks[offset..end] }),
+            )?;
+            offset = end;
+        }
+
+        Ok(())
+    }
+
+    fn get_block_children(&self, block_id: &str) -> Result<Vec<String>> {
+        let mut ids = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let path = if let Some(ref c) = cursor {
+                format!(
+                    "/blocks/{}/children?page_size=100&start_cursor={}",
+                    block_id, c
+                )
+            } else {
+                format!("/blocks/{}/children?page_size=100", block_id)
+            };
+            let resp = self.get(&path)?;
+
+            if let Some(results) = resp["results"].as_array() {
+                for block in results {
+                    if let Some(id) = block["id"].as_str() {
+                        ids.push(id.to_string());
+                    }
+                }
+            }
+
+            if resp["has_more"].as_bool().unwrap_or(false) {
+                cursor = resp["next_cursor"].as_str().map(|s| s.to_string());
+            } else {
+                break;
+            }
+        }
+
+        Ok(ids)
+    }
 }
 
 fn check_status(status: reqwest::StatusCode, body: &Value) -> Result<Value> {
