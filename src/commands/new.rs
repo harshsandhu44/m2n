@@ -1,43 +1,42 @@
 use anyhow::{Context, Result};
-use chrono::Local;
-use std::fs;
 use crate::config::Config;
+use crate::notion::NotionClient;
 
 pub fn run(title: &str) -> Result<()> {
     let config = Config::load()?;
-    let notes_dir = std::path::Path::new(&config.notes_dir);
-    fs::create_dir_all(notes_dir).context("Failed to create notes directory")?;
 
-    let slug = slugify(title);
-    let filename = format!("{}.md", slug);
-    let path = notes_dir.join(&filename);
+    let token = config
+        .notion
+        .token
+        .as_deref()
+        .filter(|t| !t.is_empty())
+        .context(
+            "notion.token is not set.\n\
+             → Run `m2n init` to set up your Notion integration.",
+        )?;
 
-    if path.exists() {
-        println!("Note already exists: {}", path.display());
-        return Ok(());
-    }
+    let db_id = config
+        .notion
+        .database_id
+        .as_deref()
+        .filter(|d| !d.is_empty())
+        .context(
+            "notion.database_id is not set.\n\
+             → Run `m2n init` to configure your Notion database.",
+        )?;
 
-    let now = Local::now();
-    let frontmatter = format!(
-        "---\ntitle: \"{}\"\ndate: {}\nstatus: draft\ntags: []\n---\n\n# {}\n\n",
-        title,
-        now.format("%Y-%m-%dT%H:%M:%S%z"),
-        title
-    );
+    let client = NotionClient::new(token);
+    let db_info = client
+        .inspect_database(db_id)
+        .context("Failed to inspect Notion database")?;
 
-    fs::write(&path, frontmatter).with_context(|| format!("Failed to write {}", path.display()))?;
-    println!("Created: {}", path.display());
+    let page_id = client
+        .create_page(db_id, &db_info, title, Some("draft"), &[], vec![])
+        .context("Failed to create Notion page")?;
+
+    let url = format!("https://www.notion.so/{}", page_id.replace('-', ""));
+    println!("Created: \"{}\"", title);
+    println!("URL:    {}", url);
+
     Ok(())
-}
-
-fn slugify(title: &str) -> String {
-    title
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
 }
