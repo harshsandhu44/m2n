@@ -37,7 +37,7 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
-    entries.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    entries.sort_by_key(|a| a.0.to_lowercase());
 
     let max_title = entries.iter().map(|(t, _, _)| t.len()).max().unwrap_or(20);
     let width = max_title.max(20);
