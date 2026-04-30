@@ -1,44 +1,38 @@
 use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
+use chrono::Local;
 use std::process::Command;
 use crate::config::Config;
 
-pub fn run(title: &str, push: bool) -> Result<()> {
+pub fn run(title: &str) -> Result<()> {
     let config = Config::load()?;
-    let notes_dir = Path::new(&config.notes_dir);
-    let path = resolve_note(notes_dir, title)?;
     let editor = config.editor();
 
+    let slug = slugify(title);
+    let tmp_path = std::env::temp_dir().join(format!("m2n-{}.md", slug));
+
+    let now = Local::now();
+    let initial = format!(
+        "---\ntitle: \"{}\"\ndate: {}\nstatus: draft\ntags: []\n---\n\n# {}\n\n",
+        title.replace('"', "\\\""),
+        now.format("%Y-%m-%dT%H:%M:%S%z"),
+        title,
+    );
+    std::fs::write(&tmp_path, initial)
+        .with_context(|| format!("Failed to create temp file {}", tmp_path.display()))?;
+
     let status = Command::new(&editor)
-        .arg(&path)
+        .arg(&tmp_path)
         .status()
         .with_context(|| format!("Failed to launch editor: {}", editor))?;
 
     if !status.success() {
+        std::fs::remove_file(&tmp_path).ok();
         bail!("Editor exited with non-zero status");
     }
 
-    if push {
-        super::push::run_path(&path)?;
-    }
-
-    Ok(())
-}
-
-fn resolve_note(notes_dir: &Path, title: &str) -> Result<PathBuf> {
-    let as_path = Path::new(title);
-    if as_path.exists() {
-        return Ok(as_path.to_path_buf());
-    }
-
-    let slug = slugify(title);
-    let by_slug = notes_dir.join(format!("{}.md", slug));
-    if by_slug.exists() {
-        return Ok(by_slug);
-    }
-
-    super::new::run(title)?;
-    Ok(by_slug)
+    let result = super::push::run_path(&tmp_path);
+    std::fs::remove_file(&tmp_path).ok();
+    result
 }
 
 fn slugify(title: &str) -> String {

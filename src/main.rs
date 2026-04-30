@@ -21,21 +21,15 @@ enum Command {
         /// Title of the note
         title: String,
     },
-    /// Open a note in your editor
+    /// Open an editor, then sync the note directly to Notion
     Write {
-        /// Title or filename of the note
+        /// Title of the note
         title: String,
-        /// Push to Notion after saving
-        #[arg(long)]
-        push: bool,
     },
     /// Edit a note (alias for write)
     Edit {
-        /// Title or filename of the note
+        /// Title of the note
         title: String,
-        /// Push to Notion after saving
-        #[arg(long)]
-        push: bool,
     },
     /// Check config, editor, and Notion connection
     Check,
@@ -58,9 +52,7 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Init => commands::init::run(),
         Command::New { title } => commands::new::run(&title),
-        Command::Write { title, push } | Command::Edit { title, push } => {
-            commands::write::run(&title, push)
-        }
+        Command::Write { title } | Command::Edit { title } => commands::write::run(&title),
         Command::Check => commands::check::run(),
         Command::Push { path, dry_run, open } => commands::push::run(&path, dry_run, open),
     }
