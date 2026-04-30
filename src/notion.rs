@@ -417,9 +417,12 @@ pub fn markdown_to_blocks(body: &str) -> Vec<Value> {
     let mut in_code = false;
     let mut code_lang = String::new();
     let mut code_lines: Vec<&str> = Vec::new();
+    // Stack for nested list items: (indent_level, block_value)
+    let mut list_stack: Vec<(usize, Value)> = Vec::new();
 
     for line in body.lines() {
         if let Some(fence_lang) = line.strip_prefix("```") {
+            flush_list_stack(&mut list_stack, &mut blocks);
             if in_code {
                 let content = code_lines.join("\n");
                 for chunk in chunk_str(&content, MAX_TEXT_LEN) {
@@ -448,8 +451,63 @@ pub fn markdown_to_blocks(body: &str) -> Vec<Value> {
         }
 
         if line.trim().is_empty() {
+            flush_list_stack(&mut list_stack, &mut blocks);
             continue;
         }
+
+        // Detect indent level for list nesting
+        let indent = line.len() - line.trim_start().len();
+        let trimmed = line.trim_start();
+
+        // Check if this line is a list item
+        let list_item = if let Some(t) = trimmed
+            .strip_prefix("- [ ] ")
+            .or_else(|| trimmed.strip_prefix("* [ ] "))
+        {
+            Some(("to_do_unchecked", t))
+        } else if let Some(t) = trimmed
+            .strip_prefix("- [x] ")
+            .or_else(|| trimmed.strip_prefix("- [X] "))
+            .or_else(|| trimmed.strip_prefix("* [x] "))
+        {
+            Some(("to_do_checked", t))
+        } else if let Some(t) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
+            Some(("bulleted_list_item", t))
+        } else if is_numbered(trimmed) {
+            let t = trimmed.split_once(". ").map(|x| x.1).unwrap_or(trimmed);
+            Some(("numbered_list_item", t))
+        } else {
+            None
+        };
+
+        if let Some((kind, text)) = list_item {
+            let block = match kind {
+                "to_do_unchecked" => json!({
+                    "object": "block", "type": "to_do",
+                    "to_do": { "rich_text": rich_text(text), "checked": false, "children": [] }
+                }),
+                "to_do_checked" => json!({
+                    "object": "block", "type": "to_do",
+                    "to_do": { "rich_text": rich_text(text), "checked": true, "children": [] }
+                }),
+                "numbered_list_item" => json!({
+                    "object": "block", "type": "numbered_list_item",
+                    "numbered_list_item": { "rich_text": rich_text(text), "children": [] }
+                }),
+                _ => json!({
+                    "object": "block", "type": "bulleted_list_item",
+                    "bulleted_list_item": { "rich_text": rich_text(text), "children": [] }
+                }),
+            };
+            push_list_item(&mut list_stack, indent, block);
+            continue;
+        }
+
+        // Non-list line: flush any pending nested list
+        flush_list_stack(&mut list_stack, &mut blocks);
 
         let block = if let Some(t) = line
             .strip_prefix("#### ")
@@ -460,11 +518,6 @@ pub fn markdown_to_blocks(body: &str) -> Vec<Value> {
             block_with_rt("heading_2", t)
         } else if let Some(t) = line.strip_prefix("# ") {
             block_with_rt("heading_1", t)
-        } else if let Some(t) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
-            block_with_rt("bulleted_list_item", t)
-        } else if is_numbered(line) {
-            let t = line.split_once(". ").map(|x| x.1).unwrap_or(line);
-            block_with_rt("numbered_list_item", t)
         } else if let Some(t) = line.strip_prefix("> ") {
             block_with_rt("quote", t)
         } else if line == "---" || line == "***" || line == "___" {
@@ -475,6 +528,8 @@ pub fn markdown_to_blocks(body: &str) -> Vec<Value> {
 
         blocks.push(block);
     }
+
+    flush_list_stack(&mut list_stack, &mut blocks);
 
     // flush an unclosed code block
     if in_code && !code_lines.is_empty() {
@@ -498,6 +553,63 @@ fn block_with_rt(kind: &str, text: &str) -> Value {
         "type": kind,
         kind: { "rich_text": rich_text(text) }
     })
+}
+
+fn push_list_item(stack: &mut Vec<(usize, Value)>, indent: usize, block: Value) {
+    const MAX_DEPTH: usize = 5;
+
+    // Pop items at same or deeper indent to get the right parent level
+    while stack.len() > 1 && stack.last().map(|(i, _)| *i >= indent).unwrap_or(false) {
+        let (_, child) = stack.pop().unwrap();
+        let parent = stack.last_mut().unwrap();
+        let kind = parent.1["type"]
+            .as_str()
+            .unwrap_or("bulleted_list_item")
+            .to_string();
+        if let Some(children) = parent.1[&kind]["children"].as_array_mut() {
+            children.push(child);
+        }
+    }
+
+    if stack.is_empty() || indent == 0 || stack.len() >= MAX_DEPTH {
+        // If deeper than stack top but already at max depth, just append flat
+        if !stack.is_empty()
+            && indent > stack.last().map(|(i, _)| *i).unwrap_or(0)
+            && stack.len() >= MAX_DEPTH
+        {
+            let (_, child) = (indent, block);
+            let parent = stack.last_mut().unwrap();
+            let kind = parent.1["type"]
+                .as_str()
+                .unwrap_or("bulleted_list_item")
+                .to_string();
+            if let Some(children) = parent.1[&kind]["children"].as_array_mut() {
+                children.push(child);
+            }
+        } else {
+            stack.push((indent, block));
+        }
+    } else {
+        stack.push((indent, block));
+    }
+}
+
+fn flush_list_stack(stack: &mut Vec<(usize, Value)>, blocks: &mut Vec<Value>) {
+    // Collapse the stack bottom-up: each item becomes a child of its parent
+    while stack.len() > 1 {
+        let (_, child) = stack.pop().unwrap();
+        let parent = stack.last_mut().unwrap();
+        let kind = parent.1["type"]
+            .as_str()
+            .unwrap_or("bulleted_list_item")
+            .to_string();
+        if let Some(children) = parent.1[&kind]["children"].as_array_mut() {
+            children.push(child);
+        }
+    }
+    if let Some((_, root)) = stack.pop() {
+        blocks.push(root);
+    }
 }
 
 fn is_numbered(line: &str) -> bool {
@@ -552,12 +664,19 @@ fn parse_inline(text: &str, out: &mut Vec<Value>) {
         return;
     }
 
+    // Check for a Markdown link [label](url) at the earliest occurrence of '['
+    let link_pos = try_parse_link(text);
     let bold_pos = text.find("**");
+    let strike_pos = first_double_tilde(text);
     let italic_pos = first_single_star(text);
     let code_pos = text.find('`');
 
-    let earliest = [
+    // Find the earliest marker position
+    let link_candidate = link_pos.as_ref().map(|(p, _, _, _)| *p);
+
+    let anno_earliest = [
         bold_pos.map(|p| (p, "**", "bold")),
+        strike_pos.map(|p| (p, "~~", "strikethrough")),
         italic_pos.map(|p| (p, "*", "italic")),
         code_pos.map(|p| (p, "`", "code")),
     ]
@@ -565,7 +684,29 @@ fn parse_inline(text: &str, out: &mut Vec<Value>) {
     .flatten()
     .min_by_key(|&(p, _, _)| p);
 
-    match earliest {
+    // Pick whichever comes first: link or annotation marker
+    let use_link = match (link_candidate, anno_earliest.as_ref()) {
+        (Some(lp), Some(&(ap, _, _))) => lp <= ap,
+        (Some(_), None) => true,
+        _ => false,
+    };
+
+    if use_link {
+        let (pos, label, url, end) = link_pos.unwrap();
+        if pos > 0 {
+            push_plain(&text[..pos], out);
+        }
+        for chunk in chunk_str(&label, MAX_TEXT_LEN) {
+            out.push(json!({
+                "type": "text",
+                "text": { "content": chunk, "link": { "url": url } }
+            }));
+        }
+        parse_inline(&text[end..], out);
+        return;
+    }
+
+    match anno_earliest {
         None => push_plain(text, out),
         Some((pos, marker, anno)) => {
             if pos > 0 {
@@ -588,6 +729,42 @@ fn parse_inline(text: &str, out: &mut Vec<Value>) {
     }
 }
 
+/// Parse a `[label](url)` link at the earliest `[`. Returns (pos, label, url, end_offset).
+fn try_parse_link(text: &str) -> Option<(usize, String, String, usize)> {
+    let pos = text.find('[')?;
+    let rest = &text[pos + 1..];
+    let close_bracket = rest.find(']')?;
+    let after_bracket = &rest[close_bracket + 1..];
+    if !after_bracket.starts_with('(') {
+        return None;
+    }
+    let after_paren = &after_bracket[1..];
+    let close_paren = after_paren.find(')')?;
+    let label = rest[..close_bracket].to_string();
+    let url = after_paren[..close_paren].to_string();
+    let end = pos + 1 + close_bracket + 1 + 1 + close_paren + 1;
+    Some((pos, label, url, end))
+}
+
+/// First `~~` that is not part of `~~~`.
+fn first_double_tilde(text: &str) -> Option<usize> {
+    let b = text.as_bytes();
+    let mut i = 0;
+    while i + 1 < text.len() {
+        if b[i] == b'~' && b[i + 1] == b'~' {
+            // Guard against triple tilde
+            if b.get(i + 2) == Some(&b'~') {
+                i += 3;
+            } else {
+                return Some(i);
+            }
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
+
 /// First `*` that is not part of `**`.
 fn first_single_star(text: &str) -> Option<usize> {
     let b = text.as_bytes();
@@ -607,7 +784,7 @@ fn first_single_star(text: &str) -> Option<usize> {
 }
 
 /// Find the closing occurrence of `marker` in `text`.
-/// For `*`, skips `**` sequences.
+/// For `*`, skips `**` sequences. For `~~`, skips `~~~`.
 fn closing(text: &str, marker: &str) -> Option<usize> {
     let b = text.as_bytes();
     let m = marker.as_bytes();
@@ -617,6 +794,10 @@ fn closing(text: &str, marker: &str) -> Option<usize> {
         if &b[i..i + mlen] == m {
             if marker == "*" && b.get(i + 1) == Some(&b'*') {
                 i += 2;
+                continue;
+            }
+            if marker == "~~" && b.get(i + 2) == Some(&b'~') {
+                i += 3;
                 continue;
             }
             return Some(i);
