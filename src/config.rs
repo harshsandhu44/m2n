@@ -1,0 +1,83 @@
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub notes_dir: String,
+    #[serde(default)]
+    pub editor: Option<String>,
+    pub notion: NotionConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct NotionConfig {
+    // token is read but never printed
+    pub token: Option<String>,
+    pub database_id: Option<String>,
+}
+
+impl Config {
+    pub fn default_config() -> Self {
+        let notes_dir = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("notes")
+            .to_string_lossy()
+            .to_string();
+
+        Config {
+            notes_dir,
+            editor: None,
+            notion: NotionConfig::default(),
+        }
+    }
+
+    pub fn load() -> Result<Self> {
+        let path = config_path()?;
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Config not found at {}. Run `m2n init` first.", path.display()))?;
+        let config: Config = toml::from_str(&content).context("Failed to parse config.toml")?;
+        Ok(config)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let path = config_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).context("Failed to create config directory")?;
+        }
+        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+        fs::write(&path, content).with_context(|| format!("Failed to write config to {}", path.display()))?;
+        Ok(())
+    }
+
+    pub fn editor(&self) -> String {
+        if let Some(ed) = &self.editor {
+            return ed.clone();
+        }
+        if let Ok(ed) = std::env::var("EDITOR") {
+            if !ed.is_empty() {
+                return ed;
+            }
+        }
+        for fallback in ["nvim", "vim", "nano"] {
+            if which(fallback) {
+                return fallback.to_string();
+            }
+        }
+        "vim".to_string()
+    }
+}
+
+pub fn config_path() -> Result<PathBuf> {
+    let base = dirs::config_dir().context("Could not determine config directory")?;
+    Ok(base.join("m2n").join("config.toml"))
+}
+
+fn which(cmd: &str) -> bool {
+    std::process::Command::new("which")
+        .arg(cmd)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
