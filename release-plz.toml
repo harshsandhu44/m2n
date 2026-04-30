@@ -1,0 +1,10 @@
+[workspace]
+# Set to true when ready to publish to crates.io
+publish = false
+
+# Create a GitHub release on each version tag
+git_release_enable = true
+git_release_draft = false
+
+# Use "keep a changelog" format
+changelog_config = "cliff"
