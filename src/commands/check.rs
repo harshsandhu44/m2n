@@ -1,6 +1,6 @@
-use anyhow::Result;
 use crate::config::{Config, config_path};
 use crate::notion::NotionClient;
+use anyhow::Result;
 
 pub fn run() -> Result<()> {
     let path = config_path()?;
@@ -15,16 +15,26 @@ pub fn run() -> Result<()> {
         Ok(c) => c,
     };
 
-    println!("Notes dir   : {}", config.notes_dir.as_deref().unwrap_or("(not set)"));
+    println!(
+        "Notes dir   : {}",
+        config.notes_dir.as_deref().unwrap_or("(not set)")
+    );
     println!("Editor      : {}", config.editor());
 
     let editor_env = std::env::var("EDITOR").unwrap_or_else(|_| "(not set)".to_string());
     println!("$EDITOR     : {}", editor_env);
 
     let token = config.notion.token.as_deref().filter(|t| !t.is_empty());
-    let db_id = config.notion.database_id.as_deref().filter(|d| !d.is_empty());
+    let db_id = config
+        .notion
+        .database_id
+        .as_deref()
+        .filter(|d| !d.is_empty());
 
-    println!("Notion token: {}", if token.is_some() { "set" } else { "not set" });
+    println!(
+        "Notion token: {}",
+        if token.is_some() { "set" } else { "not set" }
+    );
     println!("Database ID : {}", db_id.unwrap_or("not set"));
 
     if let Some(tok) = token {

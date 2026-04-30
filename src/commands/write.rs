@@ -1,7 +1,7 @@
-use anyhow::{bail, Context, Result};
+use crate::config::Config;
+use anyhow::{Context, Result, bail};
 use chrono::Local;
 use std::process::Command;
-use crate::config::Config;
 
 pub fn run(title: &str) -> Result<()> {
     let config = Config::load()?;

@@ -1,13 +1,16 @@
-use anyhow::{bail, Context, Result};
-use std::io::{self, Write};
 use crate::config::{Config, NotionConfig, config_path};
-use crate::notion::{normalize_db_id, NotionClient};
+use crate::notion::{NotionClient, normalize_db_id};
+use anyhow::{Context, Result, bail};
+use std::io::{self, Write};
 
 pub fn run() -> Result<()> {
     let path = config_path()?;
 
     if path.exists() {
-        print!("Config already exists at {}. Overwrite? [y/N]: ", path.display());
+        print!(
+            "Config already exists at {}. Overwrite? [y/N]: ",
+            path.display()
+        );
         io::stdout().flush()?;
         let mut answer = String::new();
         io::stdin().read_line(&mut answer)?;
@@ -56,8 +59,16 @@ pub fn run() -> Result<()> {
         )
     })?;
 
-    let status_mark = if db_info.status_prop.is_some() { "✓" } else { "—" };
-    let tags_mark = if db_info.tags_prop.is_some() { "✓" } else { "—" };
+    let status_mark = if db_info.status_prop.is_some() {
+        "✓"
+    } else {
+        "—"
+    };
+    let tags_mark = if db_info.tags_prop.is_some() {
+        "✓"
+    } else {
+        "—"
+    };
     println!(
         "✓  Database accessible (title: \"{}\", status: {}, tags: {})",
         db_info.title_prop, status_mark, tags_mark

@@ -23,8 +23,12 @@ pub struct NotionConfig {
 impl Config {
     pub fn load() -> Result<Self> {
         let path = config_path()?;
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("Config not found at {}. Run `m2n init` first.", path.display()))?;
+        let content = fs::read_to_string(&path).with_context(|| {
+            format!(
+                "Config not found at {}. Run `m2n init` first.",
+                path.display()
+            )
+        })?;
         let config: Config = toml::from_str(&content).context("Failed to parse config.toml")?;
         Ok(config)
     }
@@ -35,7 +39,8 @@ impl Config {
             fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
         let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        fs::write(&path, content).with_context(|| format!("Failed to write config to {}", path.display()))?;
+        fs::write(&path, content)
+            .with_context(|| format!("Failed to write config to {}", path.display()))?;
         Ok(())
     }
 

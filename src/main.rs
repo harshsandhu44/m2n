@@ -6,7 +6,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "m2n", version, about = "Markdown to Notion — local-first note CLI")]
+#[command(
+    name = "m2n",
+    version,
+    about = "Markdown to Notion — local-first note CLI"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -54,6 +58,10 @@ fn main() -> Result<()> {
         Command::New { title } => commands::new::run(&title),
         Command::Write { title } | Command::Edit { title } => commands::write::run(&title),
         Command::Check => commands::check::run(),
-        Command::Push { path, dry_run, open } => commands::push::run(&path, dry_run, open),
+        Command::Push {
+            path,
+            dry_run,
+            open,
+        } => commands::push::run(&path, dry_run, open),
     }
 }

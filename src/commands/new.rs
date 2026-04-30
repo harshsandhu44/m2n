@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use crate::config::Config;
 use crate::notion::NotionClient;
+use anyhow::{Context, Result};
 
 pub fn run(title: &str) -> Result<()> {
     let config = Config::load()?;

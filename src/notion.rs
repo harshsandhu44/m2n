@@ -1,6 +1,6 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const NOTION_VERSION: &str = "2022-06-28";
 const BASE_URL: &str = "https://api.notion.com/v1";
@@ -162,10 +162,7 @@ impl NotionClient {
 
     pub fn check_auth(&self) -> Result<String> {
         let body = self.get("/users/me")?;
-        let name = body["name"]
-            .as_str()
-            .unwrap_or("integration")
-            .to_string();
+        let name = body["name"].as_str().unwrap_or("integration").to_string();
         Ok(name)
     }
 
@@ -370,7 +367,10 @@ pub fn markdown_to_blocks(body: &str) -> Vec<Value> {
             continue;
         }
 
-        let block = if let Some(t) = line.strip_prefix("#### ").or_else(|| line.strip_prefix("### ")) {
+        let block = if let Some(t) = line
+            .strip_prefix("#### ")
+            .or_else(|| line.strip_prefix("### "))
+        {
             block_with_rt("heading_3", t)
         } else if let Some(t) = line.strip_prefix("## ") {
             block_with_rt("heading_2", t)

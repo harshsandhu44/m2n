@@ -1,7 +1,7 @@
-use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
 use crate::config::Config;
-use crate::notion::{markdown_to_blocks, parse_note, serialize_frontmatter, NotionClient};
+use crate::notion::{NotionClient, markdown_to_blocks, parse_note, serialize_frontmatter};
+use anyhow::{Context, Result, bail};
+use std::path::{Path, PathBuf};
 
 pub fn run(path_or_title: &str, dry_run: bool, open: bool) -> Result<()> {
     let config = Config::load()?;
@@ -36,8 +36,8 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
              → Run `m2n init` to configure your Notion database.",
         )?;
 
-    let raw = std::fs::read_to_string(path)
-        .with_context(|| format!("Cannot read {}", path.display()))?;
+    let raw =
+        std::fs::read_to_string(path).with_context(|| format!("Cannot read {}", path.display()))?;
 
     let (mut fm, body) = parse_note(&raw);
 
@@ -56,10 +56,7 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
         println!("Dry run — nothing will be pushed to Notion.\n");
         println!("  File:     {}", path.display());
         println!("  Title:    \"{}\"", title);
-        println!(
-            "  Status:   {}",
-            fm.status.as_deref().unwrap_or("(none)")
-        );
+        println!("  Status:   {}", fm.status.as_deref().unwrap_or("(none)"));
         if fm.tags.is_empty() {
             println!("  Tags:     (none)");
         } else {
@@ -100,7 +97,14 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
 
     let blocks = markdown_to_blocks(body.trim_start());
     let page_id = client
-        .create_page(db_id, &db_info, &title, fm.status.as_deref(), &fm.tags, blocks)
+        .create_page(
+            db_id,
+            &db_info,
+            &title,
+            fm.status.as_deref(),
+            &fm.tags,
+            blocks,
+        )
         .context("Failed to create Notion page")?;
 
     let url = format!("https://www.notion.so/{}", page_id.replace('-', ""));
@@ -109,8 +113,12 @@ fn push_file(path: &Path, config: &Config, dry_run: bool, open: bool) -> Result<
 
     fm.notion_id = Some(page_id);
     let new_content = format!("{}\n{}", serialize_frontmatter(&fm), body.trim_start());
-    std::fs::write(path, new_content)
-        .with_context(|| format!("Pushed successfully but failed to update {}", path.display()))?;
+    std::fs::write(path, new_content).with_context(|| {
+        format!(
+            "Pushed successfully but failed to update {}",
+            path.display()
+        )
+    })?;
 
     if open {
         open_url(&url)?;
