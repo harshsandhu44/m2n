@@ -2,6 +2,7 @@ use crate::config::{Config, NotionConfig, config_path};
 use crate::notion::{NotionClient, normalize_db_id};
 use anyhow::{Context, Result, bail};
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 pub fn run() -> Result<()> {
     let path = config_path()?;
@@ -87,8 +88,24 @@ pub fn run() -> Result<()> {
         );
     }
 
+    let raw_dir = prompt("Notes directory (e.g. ~/notes): ")?;
+    let notes_dir = if raw_dir.is_empty() {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("notes")
+    } else if let Some(rest) = raw_dir.strip_prefix("~/") {
+        dirs::home_dir().unwrap_or_default().join(rest)
+    } else if raw_dir == "~" {
+        dirs::home_dir().unwrap_or_default()
+    } else {
+        PathBuf::from(&raw_dir)
+    };
+    std::fs::create_dir_all(&notes_dir)
+        .with_context(|| format!("Failed to create notes directory: {}", notes_dir.display()))?;
+    println!("✓  Notes directory: {}", notes_dir.display());
+
     let config = Config {
-        notes_dir: None,
+        notes_dir: Some(notes_dir.to_string_lossy().into_owned()),
         editor: None,
         notion: NotionConfig {
             token: Some(token),
@@ -98,8 +115,8 @@ pub fn run() -> Result<()> {
     config.save()?;
 
     println!("\nConfig saved to {}", config_path()?.display());
-    println!("Run `m2n new \"My First Note\"` to create a Notion page.");
-    println!("Run `m2n write \"My Note\"` to open an editor and sync to Notion.");
+    println!("Run `m2n write \"My Note\"` to create a note and sync it to Notion.");
+    println!("Run `m2n list` to see all your notes.");
 
     Ok(())
 }

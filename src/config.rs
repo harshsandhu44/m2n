@@ -44,6 +44,18 @@ impl Config {
         Ok(())
     }
 
+    pub fn notes_dir(&self) -> Option<PathBuf> {
+        self.notes_dir.as_deref().map(|d| {
+            if let Some(rest) = d.strip_prefix("~/") {
+                dirs::home_dir().unwrap_or_default().join(rest)
+            } else if d == "~" {
+                dirs::home_dir().unwrap_or_default()
+            } else {
+                PathBuf::from(d)
+            }
+        })
+    }
+
     pub fn editor(&self) -> String {
         if let Some(ed) = &self.editor {
             return ed.clone();
