@@ -18,31 +18,14 @@ pub fn run() -> Result<()> {
     }
 
     println!("Welcome to m2n — Markdown to Notion.\n");
-
-    // Notes directory
-    let default_notes = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("notes")
-        .to_string_lossy()
-        .to_string();
-
-    let notes_dir = prompt(&format!("Notes directory [{}]: ", default_notes))?;
-    let notes_dir = if notes_dir.is_empty() {
-        default_notes
-    } else {
-        expand_tilde(&notes_dir)
-    };
-
-    // Notion token
-    println!();
     println!("Create an integration at https://www.notion.so/my-integrations,");
-    println!("then open your database in Notion → '...' → Connections → add it.");
+    println!("then open your database in Notion → '...' → Connections → add it.\n");
+
     let token = prompt("Notion integration token: ")?;
     if token.is_empty() {
         bail!("Token cannot be empty. Run `m2n init` again when you have one.");
     }
 
-    // Database URL or ID
     let raw_db = prompt("Notion database URL or ID: ")?;
     if raw_db.is_empty() {
         bail!("Database URL or ID cannot be empty.");
@@ -56,7 +39,6 @@ pub fn run() -> Result<()> {
         )
     })?;
 
-    // Verify connection
     println!();
     print!("Testing connection... ");
     io::stdout().flush()?;
@@ -95,7 +77,7 @@ pub fn run() -> Result<()> {
     }
 
     let config = Config {
-        notes_dir,
+        notes_dir: None,
         editor: None,
         notion: NotionConfig {
             token: Some(token),
@@ -105,7 +87,8 @@ pub fn run() -> Result<()> {
     config.save()?;
 
     println!("\nConfig saved to {}", config_path()?.display());
-    println!("Run `m2n new \"My First Note\"` to create a note.");
+    println!("Run `m2n new \"My First Note\"` to create a Notion page.");
+    println!("Run `m2n write \"My Note\"` to open an editor and sync to Notion.");
 
     Ok(())
 }
@@ -116,18 +99,4 @@ fn prompt(label: &str) -> Result<String> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(input.trim().to_string())
-}
-
-fn expand_tilde(path: &str) -> String {
-    if path == "~" {
-        return dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .to_string_lossy()
-            .to_string();
-    }
-    if let Some(rest) = path.strip_prefix("~/") {
-        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-        return format!("{}/{}", home.display(), rest);
-    }
-    path.to_string()
 }
