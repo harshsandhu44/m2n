@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod notion;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -24,18 +25,24 @@ enum Command {
     Write {
         /// Title or filename of the note
         title: String,
+        /// Push to Notion after saving
+        #[arg(long)]
+        push: bool,
     },
     /// Edit a note (alias for write)
     Edit {
         /// Title or filename of the note
         title: String,
+        /// Push to Notion after saving
+        #[arg(long)]
+        push: bool,
     },
-    /// Check config and environment
+    /// Check config, editor, and Notion connection
     Check,
     /// Push a note to Notion
     Push {
-        /// Title or filename of the note
-        title: String,
+        /// File path or note title
+        path: String,
     },
 }
 
@@ -45,8 +52,10 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Init => commands::init::run(),
         Command::New { title } => commands::new::run(&title),
-        Command::Write { title } | Command::Edit { title } => commands::write::run(&title),
+        Command::Write { title, push } | Command::Edit { title, push } => {
+            commands::write::run(&title, push)
+        }
         Command::Check => commands::check::run(),
-        Command::Push { title } => commands::push::run(&title),
+        Command::Push { path } => commands::push::run(&path),
     }
 }

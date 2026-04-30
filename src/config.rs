@@ -55,10 +55,10 @@ impl Config {
         if let Some(ed) = &self.editor {
             return ed.clone();
         }
-        if let Ok(ed) = std::env::var("EDITOR") {
-            if !ed.is_empty() {
-                return ed;
-            }
+        if let Ok(ed) = std::env::var("EDITOR")
+            && !ed.is_empty()
+        {
+            return ed;
         }
         for fallback in ["nvim", "vim", "nano"] {
             if which(fallback) {

@@ -1,12 +1,11 @@
 use anyhow::{bail, Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::config::Config;
 
-pub fn run(title: &str) -> Result<()> {
+pub fn run(title: &str, push: bool) -> Result<()> {
     let config = Config::load()?;
     let notes_dir = Path::new(&config.notes_dir);
-
     let path = resolve_note(notes_dir, title)?;
     let editor = config.editor();
 
@@ -19,11 +18,14 @@ pub fn run(title: &str) -> Result<()> {
         bail!("Editor exited with non-zero status");
     }
 
+    if push {
+        super::push::run_path(&path)?;
+    }
+
     Ok(())
 }
 
-fn resolve_note(notes_dir: &Path, title: &str) -> Result<std::path::PathBuf> {
-    // accept exact filename or slug
+fn resolve_note(notes_dir: &Path, title: &str) -> Result<PathBuf> {
     let as_path = Path::new(title);
     if as_path.exists() {
         return Ok(as_path.to_path_buf());
@@ -35,7 +37,6 @@ fn resolve_note(notes_dir: &Path, title: &str) -> Result<std::path::PathBuf> {
         return Ok(by_slug);
     }
 
-    // fall back: create it on the fly
     super::new::run(title)?;
     Ok(by_slug)
 }

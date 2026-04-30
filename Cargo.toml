@@ -7,7 +7,9 @@ description = "Local-first CLI for creating Markdown notes and publishing to Not
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 toml = "0.8"
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
