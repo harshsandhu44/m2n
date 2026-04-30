@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod notion;
+mod util;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
