@@ -7,4 +7,4 @@ git_release_enable = true
 git_release_draft = false
 
 # Use "keep a changelog" format
-changelog_config = "cliff"
+changelog_config = "cliff.toml"
